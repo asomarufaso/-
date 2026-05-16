@@ -1,83 +1,76 @@
-import streamlit as st
+#@title 🏠 মারুফ ভাইয়ের বাড়ি ভাড়া জেনারেটর (সিঙ্গেল ও বাল্ক) { run: "auto" }
+
 import pandas as pd
+from google.colab import files
 import io
 
-# পেজ সেটআপ
-st.set_page_config(page_title="ভাড়া ম্যানেজমেন্ট ড্যাশবোর্ড", page_icon="🏠")
-
-def to_bangla_formatted(num, is_unit=False):
-    if isinstance(num, (int, float)):
-        if is_unit:
-            formatted_num = "{:,g}".format(num) 
-        else:
-            formatted_num = "{:,}".format(int(num))
-    else:
-        formatted_num = str(num).lower()
-
-    eng_to_bng = {'0':'০', '1':'১', '2':'২', '3':'৩', '4':'৪', '5':'৫', '6':'৬', '7':'৭', '8':'৮', '9':'৯', ',':',', '.':'.'}
-    eng_to_bng_char = {'a':'এ', 'b':'বি', 'c':'সি', 'd':'ডি', 'e':'ই', 'f':'এফ'}
-    return "".join(eng_to_bng.get(char, eng_to_bng_char.get(char, char)) for char in formatted_num)
-
-def custom_round(num):
-    return int(num) + 1 if num - int(num) >= 0.5 else int(num)
-
-# ড্যাশবোর্ড ইন্টারফেস
-st.title("🏠 বাড়ি ভাড়ার বিবরণ জেনারেটর")
-st.write("আপনার এক্সেল ফাইলটি আপলোড করুন এবং স্বয়ংক্রিয়ভাবে মেসেজ জেনারেট করুন।")
-
-uploaded_file = st.file_uploader("এক্সেল ফাইলটি সিলেক্ট করুন", type=["xlsx", "xls"])
-
-if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
-    
-    months_map = {
-        "january": "জানুয়ারি", "february": "ফেব্রুয়ারি", "march": "মার্চ", 
-        "april": "এপ্রিল", "may": "মে", "june": "জুন", 
-        "july": "জুলাই", "august": "আগস্ট", "september": "সেপ্টেম্বর", 
-        "october": "অক্টোবর", "november": "নভেম্বর", "december": "ডিসেম্বর"
-    }
-
-    st.success(f"মোট {len(df)} টি বিল পাওয়া গেছে।")
-    
-    all_messages = ""
-    
-    for index, row in df.iterrows():
-        flat = str(row['Flat'])
-        month = str(row['Month']).strip().lower()
-        rent = float(row['Rent'])
-        unit = float(row['Unit'])
-        rate = float(row['Rate'])
-        water = float(row['Water'])
-        clean = float(row['Cleaning'])
-        due = float(row['Due'])
-        adv = float(row['Advance'])
-
-        mas_bangla = months_map.get(month, month.capitalize())
-        elec_raw = unit * rate
-        elec_final = custom_round(elec_raw)
-        total_final = custom_round((rent + elec_raw + water + clean + due) - adv)
+# রিসিট টেক্সট জেনারেট করার মেইন ফাংশন
+def generate_receipt_text(flat_no, month_year, rent_amount, unit_consumed, per_unit_cost, water_bill, cleaning_bill, arrears, advance):
+    try:
+        electricity_total = round(float(unit_consumed) * float(per_unit_cost))
+        total_bill = int(rent_amount) + electricity_total + int(water_bill) + int(cleaning_bill) + int(arrears)
+        net_payable = total_bill - int(advance)
         
-        msg = f"""🌟✨ ━━《 🏠 বাড়ি ভাড়ার বিবরণ 🏠 》━━ ✨🌟
-🏡 ফ্ল্যাট: {to_bangla_formatted(flat).upper()}
-📅 মাস: {mas_bangla} ২০২৬
+        return f"""🌟 ━━☆ বাড়ি ভাড়ার বিবরণ ☆━━ 🌟
+🏡 ফ্ল্যাট: {flat_no}
+📅 মাস: {month_year}
 📋 বিস্তারিত হিসাব:
 ━━━━━━━━━━━━━━━━━━━
-🏠 বাড়ি ভাড়া: {to_bangla_formatted(rent)}৳
-⚡ বৈদ্যুতিক বিল: {to_bangla_formatted(unit, is_unit=True)}×{to_bangla_formatted(rate)} = {to_bangla_formatted(elec_final)}৳
-🚿 পানির বিল: {to_bangla_formatted(water)}৳
-🧹🗑 ক্লিনিং ও আবর্জনা বিল: {to_bangla_formatted(clean)}৳
-📌 বকেয়া: {to_bangla_formatted(due)}৳
-💰 অগ্রিম: {to_bangla_formatted(adv)}৳
+🏠 বাড়ি ভাড়া: {int(rent_amount):,}৳
+⚡ বৈদ্যুতিক বিল: {unit_consumed}×{per_unit_cost} = {electricity_total:,}৳
+🚿 পানির বিল: {int(water_bill):,}৳
+🧹🗑 ক্লিনিং ও আবর্জনা বিল: {int(cleaning_bill):,}৳
+📌 বকেয়া: {int(arrears):,}৳
+💰 অগ্রিম জমা: -{int(advance):,}৳
 ━━━━━━━━━━━━━━━━━━━
-💵 মোট পরিশোধযোগ্য: ({to_bangla_formatted(rent)}+{to_bangla_formatted(elec_final)}+{to_bangla_formatted(water)}+{to_bangla_formatted(clean)}+{to_bangla_formatted(due)}-{to_bangla_formatted(adv)})
-🎯 সর্বমোট: {to_bangla_formatted(total_final)}✅
+💵 মোট পরিশোধযোগ্য: ({int(rent_amount):,}+{electricity_total:,}+{int(water_bill):,}+{int(cleaning_bill):,}+{int(arrears):,} - {int(advance):,})
+🎯 {net_payable:,} ৳ ✅
 
-📌 👉 নির্ধারিত সময়ে বিলটি পরিশোধ করবেন
 🌟 শুভেচ্ছান্তে,
 💁‍♂️ মারুফ
--------------------------------------------"""
+"""
+    except Exception as e:
+        return "ডাটা ইনপুট সঠিক নয়! দয়া করে সংখ্যাগুলো ঠিকঠাক লিখুন।"
+
+#--- ফর্ম এবং ইনপুট সেকশন ---
+পদ্ধতি = "\u0Var\u0aef\u0be7\u09b2 \u0987\u09a8\u09aa\u09c1\u099f (Manual Form)" #@param ["ম্যানুয়াল ইনপুট (Manual Form)", "এক্সেল আপলোড (Bulk Excel)"]
+
+if পদ্ধতি == "ম্যানুয়াল ইনপুট (Manual Form)":
+    print("👉 ডানপাশের ফর্মে তথ্য লিখুন। ভুল হলে ওখানেই এডিট করুন, মেসেজ অটো আপডেট হবে!\n")
+    
+    #@markdown ### 📝 এখানে ফ্ল্যাটের তথ্য লিখুন (ভুল হলে এখানেই ঠিক করুন):
+    ফ্ল্যাট_নম্বর = "\u09e7\u098f" #@param {type:"string"}
+    মাস_ও_বছর = "\u099c\u09be\u09a8\u09c1\u09df\u09be\u09b0\u09c0 \u09eRunning" #@param {type:"string"}
+    বাড়ি_ভাড়া = 5000 #@param {type:"number"}
+    বিদ্যুৎ_ইউনিট = 9 #@param {type:"number"}
+    ইউনিট_রেট = 102.77 #@param {type:"number"}
+    পানির_বিল = 100 #@param {type:"number"}
+    ক্লিনিং_বিল = 160 #@param {type:"number"}
+    বকেয়া = 930 #@param {type:"number"}
+    অগ্রিম = 0 #@param {type:"number"}
+    
+    # আউটপুট দেখানো
+    print("="*40)
+    print("হোয়াটসঅ্যাপের জন্য নিচের মেসেজটি কপি করুন:")
+    print("="*40 + "\n")
+    print(generate_receipt_text(ফ্ল্যাট_নম্বর, মাস_ও_বছর, বাড়ি_ভাড়া, বিদ্যুৎ_ইউনিট, ইউনিট_রেট, পানির_বিল, ক্লিনিং_বিল, বকেয়া, অগ্রিম))
+
+else:
+    print("\n--- 📂 এক্সেল ফাইল আপলোড করুন ---")
+    print("কলামের নামগুলো হবে: [flat_no, month_year, rent_amount, unit_consumed, per_unit_cost, water_bill, cleaning_bill, arrears, advance]\n")
+    
+    uploaded = files.upload()
+    for file_name in uploaded.keys():
+        df = pd.read_excel(io.BytesIO(uploaded[file_name]))
+        print("\n" + "="*50)
+        print(f"--- {file_name} ফাইলের সব রিসিট নিচে তৈরি হলো ---")
+        print("="*50 + "\n")
         
-        # ড্যাশবোর্ডে দেখানো
-        with st.expander(f"ফ্ল্যাট {flat} - এর বিল"):
-            st.text_area("কপি করার জন্য ক্লিক করুন:", msg, height=300)
-            st.button(f"Copy Message {index}", on_click=None, help="টেক্সট বক্স থেকে কপি করুন")
+        for index, row in df.iterrows():
+            receipt = generate_receipt_text(
+                row['flat_no'], row['month_year'], row['rent_amount'], 
+                row['unit_consumed'], row['per_unit_cost'], row['water_bill'], 
+                row['cleaning_bill'], row['arrears'], row['advance']
+            )
+            print(receipt)
+            print("\n" + "-"*40 + "\n")
